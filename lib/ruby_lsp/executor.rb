@@ -78,7 +78,7 @@ module RubyLsp
         document_highlight(uri, request.dig(:params, :position))
       when "textDocument/onTypeFormatting"
         on_type_formatting(uri, request.dig(:params, :position), request.dig(:params, :ch))
-      when "hover"
+      when "textDocument/hover"
         hover(request.dig(:params, :textDocument, :uri), request.dig(:params, :position))
       when "textDocument/inlayHint"
         inlay_hint(uri, request.dig(:params, :range))
@@ -115,7 +115,17 @@ module RubyLsp
       ).returns(T.nilable(Interface::Hover))
     end
     def hover(uri, position)
-      RubyLsp::Requests::Hover.new(@store.get(uri), position).run
+      document = @store.get(uri)
+      response = T.let(
+        RubyLsp::Requests::Hover.new(document, position).run,
+        T.nilable(Interface::Hover),
+      )
+
+      Middleware::Hover.middleware_classes.each do |middleware_class|
+        response = middleware_class.new(document, position).run(response)
+      end
+
+      response
     end
 
     sig { params(uri: String).returns(T::Array[Interface::DocumentLink]) }
