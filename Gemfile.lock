@@ -173,6 +173,7 @@ DEPENDENCIES
   minitest (~> 5.17)
   minitest-reporters (~> 1.5)
   mocha (~> 2.0)
+  parallel
   railties (~> 7.0)
   rake (~> 13.0)
   rubocop (~> 1.44)

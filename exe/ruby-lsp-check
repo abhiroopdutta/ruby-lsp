@@ -1,0 +1,117 @@
+#!/usr/bin/env ruby
+# typed: true
+# frozen_string_literal: true
+
+require "sorbet-runtime"
+
+begin
+  T::Configuration.default_checked_level = :never
+  T::Configuration.call_validation_error_handler = ->(*) {}
+  T::Configuration.inline_type_error_handler = ->(*) {}
+  T::Configuration.sig_validation_error_handler = ->(*) {}
+rescue
+  nil
+end
+
+require_relative "../lib/ruby_lsp/internal"
+require "etc"
+
+begin
+  gem("parallel")
+  require "parallel"
+rescue LoadError
+  warn("The ruby-lsp-check executable requires the parallel gem to run.")
+  exit(1)
+end
+
+# Configure requests with lambdas to generate extra parameters on top of the file URI. This is needed so that we don't
+# use positions or ranges that are incompatible with the current file being inspected
+
+no_params = ->(_contents) { {} }
+range_params = lambda do |contents|
+  max = contents.length
+  lines = [rand(max).floor, rand(max).floor].sort
+
+  {
+    range: {
+      start: { line: lines[0], character: 0 },
+      end: { line: lines[1], character: 0 },
+    },
+  }
+end
+position_params = lambda do |contents|
+  lines = contents.lines
+  line = rand(lines.length).floor
+
+  { position: { line: line, character: rand(lines[line].length).floor } }
+end
+
+on_type_params = ->(contents) { position_params.call(contents).merge(ch: "\n") }
+multi_position_params = ->(contents) { { positions: [position_params.call(contents)] } }
+
+requests = {
+  "textDocument/semanticTokens/full" => no_params,
+  "textDocument/semanticTokens/range" => range_params,
+  "textDocument/documentSymbol" => no_params,
+  "textDocument/foldingRange" => no_params,
+  "textDocument/formatting" => no_params,
+  "textDocument/diagnostic" => no_params,
+  "textDocument/documentLink" => no_params,
+  "textDocument/inlayHint" => range_params,
+  "textDocument/selectionRange" => multi_position_params,
+  "textDocument/documentHighlight" => position_params,
+  "textDocument/hover" => position_params,
+  "textDocument/codeAction" => range_params,
+  "textDocument/onTypeFormatting" => on_type_params,
+}
+
+store = RubyLsp::Store.new
+files = Dir["**/*.rb"]
+
+all_errors = Parallel.map(files, { in_processes: Etc.nprocessors, with_index: true }) do |file, index|
+  errors = {}
+
+  file_uri = "file://#{File.expand_path(file)}"
+  contents = File.read(file)
+  store.set(file_uri, contents)
+  base_params = { textDocument: { uri: file_uri } }
+
+  # Run each configured request on the current file
+  requests.each do |method, params_gen|
+    result = RubyLsp::Executor.new(store).execute({
+      method: method,
+      params: base_params.merge(params_gen.call(contents)),
+    })
+
+    error = result.error
+
+    if error
+      errors[method] = [] if errors[method].nil?
+      errors[method] << { file: file, error: error.message }
+    end
+  end
+
+  store.delete(file_uri)
+  puts "Inspecting file #{index + 1}/#{files.length}" if (index + 1) % 100 == 0
+  errors
+end
+
+# The result of Parallel.map is an array of hashes, so we need to reduce it to a single hash
+all_errors = all_errors.reduce({}, :merge)
+
+if all_errors.empty?
+  puts "All requests executed successfully"
+  exit(0)
+end
+
+puts "Error executing requests\n\n"
+
+all_errors.each do |method, items|
+  puts "Method: #{method}\n\n"
+
+  items.each do |item|
+    puts "  #{item[:file]}: #{item[:message]}"
+  end
+end
+
+exit(1)

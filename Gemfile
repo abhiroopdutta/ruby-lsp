@@ -21,3 +21,6 @@ gem "yard", "~> 0.9", require: false
 
 # The Rails documentation link only activates when railties is detected.
 gem "railties", "~> 7.0", require: false
+
+# Only used for the ruby-lsp-check executable
+gem "parallel", require: false
