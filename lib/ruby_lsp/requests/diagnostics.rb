@@ -1,7 +1,7 @@
 # typed: strict
 # frozen_string_literal: true
 
-require "ruby_lsp/requests/support/rubocop_diagnostics_runner"
+require "ruby_lsp/requests/support/educational_diagnostic"
 
 module RubyLsp
   module Requests
@@ -26,6 +26,7 @@ module RubyLsp
         super(document)
 
         @uri = uri
+        @tips = T.let([], T::Array[LanguageServer::Protocol::Interface::Diagnostic])
       end
 
       sig do
@@ -34,18 +35,48 @@ module RubyLsp
             T.any(
               T.all(T::Array[Support::RuboCopDiagnostic], Object),
               T.all(T::Array[Support::SyntaxErrorDiagnostic], Object),
+              T.all(T::Array[LanguageServer::Protocol::Interface::Diagnostic], Object),
             ),
           ),
         )
       end
       def run
         return if @document.syntax_error?
-        return unless defined?(Support::RuboCopDiagnosticsRunner)
 
-        # Don't try to run RuboCop diagnostics for files outside the current working directory
-        return unless @uri.sub("file://", "").start_with?(Dir.pwd)
+        visit(@document.tree) if @document.parsed?
 
-        Support::RuboCopDiagnosticsRunner.instance.run(@uri, @document)
+        @tips
+      end
+
+      sig { override.params(node: SyntaxTree::ClassDeclaration).void }
+      def visit_class(node)
+        return if node.nil?
+        return if node.superclass.nil?
+
+        constant = node.constant.constant
+        constant_location = node.constant.location
+        superclass = node.superclass.value
+        superclass_location = node.superclass.value.location
+
+        message = <<~MSG
+          #{constant.value} is a class that inherits from #{superclass.value}.
+          This gives #{constant.value} access to all of the methods of #{superclass.value}.
+        MSG
+
+        range = LanguageServer::Protocol::Interface::Range.new(
+          start: LanguageServer::Protocol::Interface::Position.new(
+            line: constant_location.start_line - 1,
+            character: constant_location.start_column,
+          ),
+          end: LanguageServer::Protocol::Interface::Position.new(
+            line: superclass_location.end_line - 1,
+            character: superclass_location.end_column,
+          ),
+        )
+
+        @tips << Support::EducationalDiagnostic.new(message, range)
+
+        super
       end
     end
   end
