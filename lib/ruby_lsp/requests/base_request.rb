@@ -37,6 +37,17 @@ module RubyLsp
         )
       end
 
+      sig { params(start_node: SyntaxTree::Node, end_node: SyntaxTree::Node).returns(Interface::Range) }
+      def range_between_nodes(start_node, end_node)
+        start_location = start_node.location
+        end_location = end_node.location
+
+        Interface::Range.new(
+          start: Interface::Position.new(line: start_location.start_line - 1, character: start_location.start_column),
+          end: Interface::Position.new(line: end_location.end_line - 1, character: end_location.end_column),
+        )
+      end
+
       sig do
         params(node: T.any(SyntaxTree::ConstPathRef, SyntaxTree::ConstRef, SyntaxTree::TopConstRef)).returns(String)
       end

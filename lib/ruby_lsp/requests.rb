@@ -31,6 +31,7 @@ module RubyLsp
     autoload :CodeActions, "ruby_lsp/requests/code_actions"
     autoload :DocumentHighlight, "ruby_lsp/requests/document_highlight"
     autoload :InlayHints, "ruby_lsp/requests/inlay_hints"
+    autoload :Tip, "ruby_lsp/requests/tip"
 
     # :nodoc:
     module Support

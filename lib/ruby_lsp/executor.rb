@@ -98,7 +98,21 @@ module RubyLsp
 
           nil
         end
+      when "textDocument/tip"
+        tip(uri)
       end
+    end
+
+    sig { params(uri: String).void }
+    def tip(uri)
+      tips = Requests::Tip.new(@store.get(uri), uri).run
+
+      @notifications << Notification.new(
+        message: "textDocument/publishDiagnostics",
+        params: Interface::PublishDiagnosticsParams.new(uri: uri, diagnostics: tips),
+      )
+
+      VOID
     end
 
     sig { params(uri: String).returns(T::Array[Interface::FoldingRange]) }

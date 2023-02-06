@@ -57,18 +57,33 @@ module RubyLsp
           # https://microsoft.github.io/language-server-protocol/specification/#exit
           status = @store.empty? ? 0 : 1
           exit(status)
+        when "textDocument/diagnostic"
+          push_to_queue(request)
+          push_to_queue(
+            {
+              method: "textDocument/tip",
+              params: request[:params],
+              id: nil,
+            },
+          )
         else
           # Default case: push the request to the queue to be executed by the worker
-          job = Job.new(request: request, cancelled: false)
-
-          # Remember a handle to the job, so that we can cancel it
-          @mutex.synchronize { @jobs[request[:id]] = job }
-          @job_queue << job
+          push_to_queue(request)
         end
       end
     end
 
     private
+
+    sig { params(request: T::Hash[Symbol, T.untyped]).void }
+    def push_to_queue(request)
+      job = Job.new(request: request, cancelled: false)
+
+      # Remember a handle to the job, so that we can cancel it. We only do this for requests and not notifications,
+      # since we need the ID
+      @mutex.synchronize { @jobs[request[:id]] = job } if request[:id]
+      @job_queue << job
+    end
 
     sig { returns(Thread) }
     def new_worker
