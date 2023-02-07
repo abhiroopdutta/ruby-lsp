@@ -24,26 +24,30 @@ module RubyLsp
           uri: String,
           document: Document,
           range: T::Range[Integer],
+          context: T::Hash[Symbol, T.untyped],
         ).void
       end
-      def initialize(uri, document, range)
+      def initialize(uri, document, range, context)
         super(document)
 
         @uri = uri
         @range = range
+        @context = context
       end
 
-      sig { override.returns(T.nilable(T.all(T::Array[LanguageServer::Protocol::Interface::CodeAction], Object))) }
+      sig { override.returns(T.nilable(T.all(T::Array[Interface::CodeAction], Object))) }
       def run
-        diagnostics = @document.cache_fetch(:diagnostics) { Diagnostics.new(@uri, @document).run }
-        return if diagnostics.nil?
+        diagnostics = @context[:diagnostics]
+        return if diagnostics.nil? || diagnostics.empty?
 
-        corrections = diagnostics.select do |diagnostic|
-          diagnostic.correctable? && T.cast(diagnostic, Support::RuboCopDiagnostic).in_range?(@range)
+        diagnostics.filter_map do |diagnostic|
+          code_action = diagnostic.dig(:data, :code_action)
+          range = code_action.dig(:edit, :documentChanges, 0, :edits, 0, :range)
+
+          if diagnostic.dig(:data, :correctable) && @range.cover?(range.dig(:start, :line)..range.dig(:end, :line))
+            code_action
+          end
         end
-        return [] if corrections.empty?
-
-        T.cast(corrections, T::Array[Support::RuboCopDiagnostic]).map!(&:to_lsp_code_action)
       end
     end
   end
