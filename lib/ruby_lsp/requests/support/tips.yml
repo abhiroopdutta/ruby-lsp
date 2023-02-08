@@ -1,0 +1,18 @@
+superclass:
+  code: 0x0001
+  message: |
+    The class %{class_name} inherits from %{super_class_name}.
+
+    All methods defined in the superclass (%{super_class_name}) are available in the subclass (%{class_name}).
+validate:
+  code: 0x0002
+  message: |
+    Defines a Rails validation that invokes the method '%{method_name}' on each instance of the current model before persisting to a database.
+validates:
+  code: 0x0003
+  message: |
+    Validates the '%{field_name}' field on each instance of the current model before persisting to a database.
+method_missing:
+  code: 0x0004
+  message: |
+    Invoked by Ruby when the current object is sent a message it cannot handle.
