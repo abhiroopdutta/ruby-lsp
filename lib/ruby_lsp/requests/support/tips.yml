@@ -1,18 +1,40 @@
-superclass:
+inheritance:
   code: 0x0001
+  search_pattern: "ClassDeclaration[constant: ConstRef, superclass: VarRef]"
+  extraction_methods:
+    class_name: "constant"
+    superclass_name: "superclass"
+  range:
+    - constant
+    - superclass
   message: |
-    The class %{class_name} inherits from %{super_class_name}.
+    The class %{class_name} inherits from %{superclass_name}.
 
-    All methods defined in the superclass (%{super_class_name}) are available in the subclass (%{class_name}).
+    All methods defined in the superclass (%{superclass_name}) are available in the subclass (%{class_name}).
 validate:
   code: 0x0002
+  search_pattern: "Command[message: Ident[value: 'validate']]"
+  extraction_methods:
+    method_name: "arguments.parts.first"
+  range:
+    - message
+    - arguments.parts.first
   message: |
     Defines a Rails validation that invokes the method '%{method_name}' on each instance of the current model before persisting to a database.
 validates:
   code: 0x0003
+  search_pattern: "Command[message: Ident[value: 'validates']]"
+  extraction_methods:
+    field_name: "arguments.parts.first"
+  range:
+    - message
+    - arguments.parts.first
   message: |
     Validates the '%{field_name}' field on each instance of the current model before persisting to a database.
 method_missing:
   code: 0x0004
+  search_pattern: "DefNode[name: Ident[value: 'method_missing']]"
+  range:
+    - name
   message: |
     Invoked by Ruby when the current object is sent a message it cannot handle.
