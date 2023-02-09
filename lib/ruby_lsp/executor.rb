@@ -84,6 +84,8 @@ module RubyLsp
         inlay_hint(uri, request.dig(:params, :range))
       when "textDocument/codeAction"
         code_action(uri, request.dig(:params, :range))
+      when "textDocument/codeLens"
+        code_lens(uri)
       when "textDocument/diagnostic"
         begin
           diagnostic(uri)
@@ -232,6 +234,13 @@ module RubyLsp
       Requests::CodeActions.new(uri, document, start_line..end_line).run
     end
 
+    sig { params(uri: String).returns(T::Array[Interface::CodeLens]) }
+    def code_lens(uri)
+      @store.cache_fetch(uri, :code_lens) do |document|
+        Requests::CodeLens.new(document, uri).run
+      end
+    end
+
     sig { params(uri: String).returns(T.nilable(Interface::FullDocumentDiagnosticReport)) }
     def diagnostic(uri)
       response = @store.cache_fetch(uri, :diagnostics) do |document|
@@ -332,6 +341,7 @@ module RubyLsp
           document_on_type_formatting_provider: on_type_formatting_provider,
           diagnostic_provider: diagnostics_provider,
           inlay_hint_provider: inlay_hint_provider,
+          code_lens_provider: enabled_features.include?("codeLens") || true, # For testing, should be removed.
         ),
       )
     end
