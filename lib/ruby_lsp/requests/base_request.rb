@@ -24,17 +24,9 @@ module RubyLsp
       sig { abstract.returns(Object) }
       def run; end
 
-      sig { params(node: SyntaxTree::Node).returns(LanguageServer::Protocol::Interface::Range) }
+      sig { params(node: SyntaxTree::Node).returns(Interface::Range) }
       def range_from_syntax_tree_node(node)
-        loc = node.location
-
-        LanguageServer::Protocol::Interface::Range.new(
-          start: LanguageServer::Protocol::Interface::Position.new(
-            line: loc.start_line - 1,
-            character: loc.start_column,
-          ),
-          end: LanguageServer::Protocol::Interface::Position.new(line: loc.end_line - 1, character: loc.end_column),
-        )
+        range_between_nodes(node, node)
       end
 
       sig { params(start_node: SyntaxTree::Node, end_node: SyntaxTree::Node).returns(Interface::Range) }
