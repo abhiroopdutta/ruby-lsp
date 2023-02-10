@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require "ruby_test_runner"
+
 module RubyLsp
   module Requests
     # ![Code lens demo](../../misc/code_actions.gif)
@@ -68,12 +70,13 @@ module RubyLsp
 
       sig { params(node: SyntaxTree::ClassDeclaration).returns(Interface::CodeLens) }
       def code_lens_for_all_tests_in_file(node)
-        path = @uri.delete_prefix("file://")
+        path = @uri.delete_prefix("file://#{Dir.pwd}/")
+        command = RubyTestRunner::Command.new(Dir.pwd, path, nil).runner_command
 
         Interface::CodeLens.new(
           range: range_from_syntax_tree_node(node),
           command: Interface::Command.new(
-            command: RUN_TEST_COMMAND, title: "✨ Run all tests in this file ✨", arguments: [path],
+            command: RUN_TEST_COMMAND, title: "✨ Run all tests in this file ✨", arguments: [command],
           ),
         )
       end

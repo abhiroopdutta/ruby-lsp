@@ -18,6 +18,7 @@ Gem::Specification.new do |s|
   s.require_paths = ["lib"]
 
   s.add_dependency("language_server-protocol", "~> 3.17.0")
+  s.add_dependency("ruby_test_runner")
   s.add_dependency("sorbet-runtime")
   s.add_dependency("syntax_tree", ">= 5.3.0", "< 6")
 

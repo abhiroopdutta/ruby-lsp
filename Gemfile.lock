@@ -3,8 +3,15 @@ PATH
   specs:
     ruby-lsp (0.3.8)
       language_server-protocol (~> 3.17.0)
+      ruby_test_runner
       sorbet-runtime
       syntax_tree (>= 5.3.0, < 6)
+
+PATH
+  remote: /Users/jennyshih/src/github.com/Shopify/ruby_test_runner
+  specs:
+    ruby_test_runner (0.1.0)
+      syntax_tree (>= 0.3.8)
 
 GEM
   remote: https://rubygems.org/
@@ -181,6 +188,7 @@ DEPENDENCIES
   rubocop-shopify (~> 2.12)
   rubocop-sorbet (~> 0.7)
   ruby-lsp!
+  ruby_test_runner!
   sorbet-static-and-runtime
   tapioca (~> 0.10)
   yard (~> 0.9)

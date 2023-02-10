@@ -18,6 +18,7 @@ gem "rubocop-sorbet", "~> 0.7", require: false
 gem "sorbet-static-and-runtime"
 gem "tapioca", "~> 0.10", require: false
 gem "yard", "~> 0.9", require: false
+gem "ruby_test_runner", path: "/Users/jennyshih/src/github.com/Shopify/ruby_test_runner"
 
 # The Rails documentation link only activates when railties is detected.
 gem "railties", "~> 7.0", require: false
