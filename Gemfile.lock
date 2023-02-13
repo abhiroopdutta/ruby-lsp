@@ -8,7 +8,7 @@ PATH
       syntax_tree (>= 5.3.0, < 6)
 
 PATH
-  remote: /Users/jennyshih/src/github.com/Shopify/ruby_test_runner
+  remote: /Users/jennyshih/Dev/hackdays2023/ruby_test_runner
   specs:
     ruby_test_runner (0.1.0)
       syntax_tree (>= 0.3.8)
