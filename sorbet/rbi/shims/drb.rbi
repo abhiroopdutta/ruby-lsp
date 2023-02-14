@@ -12,4 +12,7 @@ class DRb::DRbObject
 
   sig { params(id: T.any(Integer, String)).void }
   def remove_job_handle(id); end
+
+  sig { params(pid: Integer).void }
+  def add_stopped_worker(pid); end
  end

@@ -342,7 +342,7 @@ class IntegrationTest < Minitest::Test
       {
         initializationOptions: {
           enabledFeatures: enabled_features,
-          telemetryEnabled: telemetry_enabled,
+          workerCount: 1,
         },
       },
     )[:result]

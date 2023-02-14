@@ -22,8 +22,28 @@ module RubyLsp
       @mutex = T.let(Mutex.new, Mutex)
       @jobs = T.let({}, T::Hash[T.any(String, Integer), Job])
       @queue_closed = T.let(false, T::Boolean)
+      @stopped_workers = T.let([], T::Array[Integer])
     end
 
+    # Save a stopped worker PID to the list so that we can restart it later
+    sig { params(pid: Integer).void }
+    def add_stopped_worker(pid)
+      @stopped_workers << pid
+    end
+
+    # Remove a stopped worker PID. Used when restarting workers
+    sig { params(pid: Integer).void }
+    def remove_stopped_worker(pid)
+      @stopped_workers.delete(pid)
+    end
+
+    # Loop through stopped workers
+    sig { params(block: T.proc.params(pid: Integer).void).void }
+    def each_stopped_worker(&block)
+      @stopped_workers.each(&block)
+    end
+
+    # Mark a job as cancelled. A job can only be cancelled if it's still in the queue
     sig { params(id: T.any(Integer, String)).void }
     def cancel_job(id)
       @mutex.synchronize { @jobs[id]&.cancel }
@@ -44,7 +64,9 @@ module RubyLsp
       raise QueueClosedError if @queue_closed
 
       @mutex.synchronize do
-        @request_queue.pop
+        job = @request_queue.pop
+        @jobs.delete(job.request[:id]) if job
+        job
       end
     end
 
@@ -60,11 +82,6 @@ module RubyLsp
       @mutex.synchronize do
         @response_queue.pop
       end
-    end
-
-    sig { params(id: T.any(Integer, String)).void }
-    def remove_job_handle(id)
-      @mutex.synchronize { @jobs.delete(id) }
     end
 
     sig { void }

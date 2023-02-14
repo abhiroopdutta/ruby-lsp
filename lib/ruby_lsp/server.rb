@@ -20,6 +20,13 @@ module RubyLsp
       @responder = T.let(new_responder, Thread)
       @drb_uri = T.let(DRb.start_service("drbunix:", @global_state).uri, String)
       @workers = T.let([], T::Array[Integer])
+
+      # Guarantee that processes will be killed on exit if anything goes wrong with regular shutdown
+      at_exit do
+        @workers.each do |pid|
+          Process.kill(T.must(Signal.list["EXIT"]), pid)
+        end
+      end
     end
 
     sig { void }
@@ -41,17 +48,19 @@ module RubyLsp
         when "shutdown"
           warn("Shutting down Ruby LSP...")
 
-          # Close the queue so that we can no longer receive items
-          # @job_queue.close
-          # # Clear any remaining jobs so that the thread can terminate
-          # @job_queue.clear
-          # @jobs.clear
-          # Wait until the thread is finished
+          # Close queues
           @global_state.shutdown
+          # Wait for remaining responses to be pushed to IO
           @responder.join
+          # Clear the store
           @global_state.store.clear
 
-          @workers.each { |pid| Process.waitpid(pid) }
+          # Make sure all workers receive a continue signal, so that they try to pop the queue and break out of the loop
+          @workers.each do |pid|
+            Process.kill(T.must(Signal.list["CONT"]), pid)
+            Process.waitpid(pid)
+          end
+
           DRb.stop_service
 
           finalize_request(Result.new(response: nil, notifications: []), request)
@@ -61,6 +70,12 @@ module RubyLsp
           status = @global_state.store.empty? ? 0 : 1
           exit(status)
         else
+          # Restart any stopped workers that are waiting for requests
+          @global_state.each_stopped_worker do |pid|
+            Process.kill(T.must(Signal.list["CONT"]), pid)
+            @global_state.remove_stopped_worker(pid)
+          end
+
           @global_state.push_request(request)
         end
       end
@@ -74,8 +89,7 @@ module RubyLsp
         # Thread::Queue#pop is thread safe and will wait until an item is available
         loop do
           request, result = T.let(@global_state.pop_response, T.nilable([T::Hash[Symbol, T.untyped], Result]))
-          # The only time when the job is nil is when the queue is closed and we can then terminate the thread
-          next sleep(0.0001) if request.nil? || result.nil?
+          next Thread.main.run if request.nil? || result.nil?
 
           finalize_request(result, request)
         rescue GlobalState::QueueClosedError
@@ -148,18 +162,22 @@ module RubyLsp
     def spawn_workers
       @global_state.store.worker_count.times do
         @workers << fork do
+          # Connect with DRb and get the shared global state object
           DRb.start_service
           global_state = DRb::DRbObject.new_with_uri(@drb_uri)
 
           loop do
             job = T.let(global_state.pop_request, T.nilable(Job))
 
-            # The only time when the job is nil is when the queue is closed and we can then terminate the thread
-            next sleep(0.0001) if job.nil?
+            # If there's no item in the queue, stop the process. It will be restarted when a new request enters the
+            # queue
+            if job.nil?
+              global_state.add_stopped_worker(Process.pid)
+              Process.kill(T.must(Signal.list["STOP"]), Process.pid)
+              next
+            end
 
             request = job.request
-            global_state.remove_job_handle(request[:id])
-
             result = if job.cancelled
               # We need to return nil to the client even if the request was cancelled
               Result.new(response: nil, notifications: [])
