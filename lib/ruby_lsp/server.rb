@@ -17,9 +17,9 @@ module RubyLsp
       @reader = T.let(Transport::Stdio::Reader.new, Transport::Stdio::Reader)
 
       @global_state = T.let(GlobalState.new, GlobalState)
-      @worker = T.let(new_worker, Thread)
-
-      Thread.main.priority = 1
+      @responder = T.let(new_responder, Thread)
+      @drb_uri = T.let(DRb.start_service("drbunix:", @global_state).uri, String)
+      @workers = T.let([], T::Array[Integer])
     end
 
     sig { void }
@@ -33,6 +33,8 @@ module RubyLsp
         when "initialize", "textDocument/didOpen", "textDocument/didClose", "textDocument/didChange"
           result = Executor.new(@global_state.store).execute(request)
           finalize_request(result, request)
+        when "initialized"
+          spawn_workers
         when "$/cancelRequest"
           # Cancel the job if it's still in the queue
           @global_state.cancel_job(request[:params][:id])
@@ -46,8 +48,11 @@ module RubyLsp
           # @jobs.clear
           # Wait until the thread is finished
           @global_state.shutdown
-          @worker.join
+          @responder.join
           @global_state.store.clear
+
+          @workers.each { |pid| Process.waitpid(pid) }
+          DRb.stop_service
 
           finalize_request(Result.new(response: nil, notifications: []), request)
         when "exit"
@@ -64,26 +69,17 @@ module RubyLsp
     private
 
     sig { returns(Thread) }
-    def new_worker
+    def new_responder
       Thread.new do
         # Thread::Queue#pop is thread safe and will wait until an item is available
         loop do
-          job = T.let(@global_state.pop_request, T.nilable(Job))
-
+          request, result = T.let(@global_state.pop_response, T.nilable([T::Hash[Symbol, T.untyped], Result]))
           # The only time when the job is nil is when the queue is closed and we can then terminate the thread
-          break if job.nil?
-
-          request = job.request
-          @global_state.remove_job_handle(request[:id])
-
-          result = if job.cancelled
-            # We need to return nil to the client even if the request was cancelled
-            Result.new(response: nil, notifications: [])
-          else
-            Executor.new(@global_state.store).execute(request)
-          end
+          next sleep(0.0001) if request.nil? || result.nil?
 
           finalize_request(result, request)
+        rescue GlobalState::QueueClosedError
+          break
         end
       end
     end
@@ -146,6 +142,37 @@ module RubyLsp
 
       params[:uri] = uri.sub(%r{.*://#{Dir.home}}, "~") if uri
       params
+    end
+
+    sig { void }
+    def spawn_workers
+      @global_state.store.worker_count.times do
+        @workers << fork do
+          DRb.start_service
+          global_state = DRb::DRbObject.new_with_uri(@drb_uri)
+
+          loop do
+            job = T.let(global_state.pop_request, T.nilable(Job))
+
+            # The only time when the job is nil is when the queue is closed and we can then terminate the thread
+            next sleep(0.0001) if job.nil?
+
+            request = job.request
+            global_state.remove_job_handle(request[:id])
+
+            result = if job.cancelled
+              # We need to return nil to the client even if the request was cancelled
+              Result.new(response: nil, notifications: [])
+            else
+              Executor.new(global_state.store).execute(request)
+            end
+
+            global_state.push_response([request, result])
+          rescue GlobalState::QueueClosedError
+            break
+          end
+        end
+      end
     end
   end
 end

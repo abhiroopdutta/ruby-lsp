@@ -5,6 +5,8 @@ module RubyLsp
   class GlobalState
     extend T::Sig
 
+    class QueueClosedError < StandardError; end
+
     sig { returns(Store) }
     attr_reader :store
 
@@ -14,11 +16,12 @@ module RubyLsp
     sig { void }
     def initialize
       @store = T.let(Store.new, Store)
-      @queue_request = T.let(Thread::Queue.new, Thread::Queue)
-      @queue_response = T.let(Thread::Queue.new, Thread::Queue)
+      @request_queue = T.let([], T::Array[Job])
+      @response_queue = T.let([], T::Array[[T::Hash[Symbol, T.untyped], Result]])
 
       @mutex = T.let(Mutex.new, Mutex)
       @jobs = T.let({}, T::Hash[T.any(String, Integer), Job])
+      @queue_closed = T.let(false, T::Boolean)
     end
 
     sig { params(id: T.any(Integer, String)).void }
@@ -33,22 +36,30 @@ module RubyLsp
 
       # Remember a handle to the job, so that we can cancel it
       @mutex.synchronize { @jobs[request[:id]] = job }
-      @queue_request << job
+      @request_queue << job
     end
 
     sig { returns(T.nilable(Job)) }
     def pop_request
-      @queue_request.pop
+      raise QueueClosedError if @queue_closed
+
+      @mutex.synchronize do
+        @request_queue.pop
+      end
     end
 
-    sig { params(result: Result).void }
+    sig { params(result: [T::Hash[Symbol, T.untyped], Result]).void }
     def push_response(result)
-      @queue_response << result
+      @response_queue << result
     end
 
-    sig { returns(Result) }
+    sig { returns(T.nilable([T::Hash[Symbol, T.untyped], Result])) }
     def pop_response
-      @queue_response.pop
+      raise QueueClosedError if @queue_closed
+
+      @mutex.synchronize do
+        @response_queue.pop
+      end
     end
 
     sig { params(id: T.any(Integer, String)).void }
@@ -58,11 +69,9 @@ module RubyLsp
 
     sig { void }
     def shutdown
-      @queue_request.close
-      @queue_request.clear
-
-      @queue_response.close
-      @queue_response.clear
+      @queue_closed = true
+      @request_queue.clear
+      @response_queue.clear
     end
   end
 end

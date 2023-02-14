@@ -270,6 +270,10 @@ module RubyLsp
     def initialize_request(options)
       @store.clear
       @store.encoding = options.dig(:capabilities, :general, :positionEncodings)
+
+      worker_count = options.dig(:initializationOptions, :workerCount)
+      @store.worker_count = worker_count if worker_count
+
       enabled_features = options.dig(:initializationOptions, :enabledFeatures) || []
 
       document_symbol_provider = if enabled_features.include?("documentSymbols")
