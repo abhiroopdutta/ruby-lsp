@@ -39,6 +39,17 @@ module RubyLsp
         initialize_request(request.dig(:params))
       when "initialized"
         warn("Ruby LSP is ready")
+
+        # Load server extensions. Any gem in the $LOAD_PATH that has a `lib/ruby_lsp/extension.rb` file will get loaded
+        # automatically
+        $LOAD_PATH.each do |path|
+          extension_path = File.join(path, "ruby_lsp", "extension.rb")
+          require extension_path if File.exist?(extension_path)
+        end
+
+        # Activate all extensions
+        Extensions::Extension.extensions.each(&:activate)
+
         VOID
       when "textDocument/didOpen"
         text_document_did_open(uri, request.dig(:params, :textDocument, :text))
@@ -132,7 +143,9 @@ module RubyLsp
       ).returns(T.nilable(Interface::Hover))
     end
     def hover(uri, position)
-      RubyLsp::Requests::Hover.new(@store.get(uri), position).run
+      document = @store.get(uri)
+      response = Requests::Hover.new(document, position).run
+      Requests::Hover.run_middleware(document, position, response)
     end
 
     sig { params(uri: String).returns(T::Array[Interface::DocumentLink]) }

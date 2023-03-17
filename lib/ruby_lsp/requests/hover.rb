@@ -20,6 +20,30 @@ module RubyLsp
     class Hover < BaseRequest
       extend T::Sig
 
+      class << self
+        extend T::Sig
+
+        sig { returns(T::Array[T.class_of(Extensions::Middleware::Hover)]) }
+        def middleware
+          @middleware ||= T.let([], T.nilable(T::Array[T.class_of(Extensions::Middleware::Hover)]))
+        end
+
+        sig do
+          params(
+            document: Document,
+            position: Document::PositionShape,
+            response: T.nilable(Interface::Hover),
+          ).returns(T.nilable(Interface::Hover))
+        end
+        def run_middleware(document, position, response)
+          return response if middleware.empty?
+
+          response = T.let(response, T.nilable(Interface::Hover))
+          middleware.each { |klass| response = klass.new(document, position, response).run }
+          response
+        end
+      end
+
       ALLOWED_TARGETS = T.let(
         [
           SyntaxTree::Command,

@@ -12,3 +12,5 @@ require "ruby_lsp/server"
 require "ruby_lsp/executor"
 require "ruby_lsp/requests"
 require "ruby_lsp/store"
+
+require "ruby_lsp/extensions"
