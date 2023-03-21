@@ -53,4 +53,13 @@ class BaseRequestTest < Minitest::Test
     )
     assert_instance_of(RubyLsp::Requests::SemanticHighlighting, semantic_highlighting)
   end
+
+  def test_registering_after_request_on_requests_that_do_not_accept_it
+    assert_raises(
+      RubyLsp::Requests::BaseRequest::RequestHookError,
+      "Request FoldingRange does not accept after_request hooks",
+    ) do
+      RubyLsp::Requests::FoldingRanges.after_request(Class.new(RubyLsp::Extensions::Visitor))
+    end
+  end
 end

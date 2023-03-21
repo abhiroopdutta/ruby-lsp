@@ -38,6 +38,15 @@ module RubyLsp
       when "initialize"
         initialize_request(request.dig(:params))
       when "initialized"
+        errors = Extensions::Base.load_extensions.map(&:message)
+        @notifications << Notification.new(
+          message: "window/showMessage",
+          params: Interface::ShowMessageParams.new(
+            type: Constant::MessageType::ERROR,
+            message: "Error loading extensions: #{errors.join(", ")}",
+          ),
+        ) if errors.any?
+
         warn("Ruby LSP is ready")
         VOID
       when "textDocument/didOpen"
@@ -132,7 +141,10 @@ module RubyLsp
       ).returns(T.nilable(Interface::Hover))
     end
     def hover(uri, position)
-      RubyLsp::Requests::Hover.new(@store.get(uri), position).run
+      T.cast(
+        RubyLsp::Requests::Hover.new(@store.get(uri), position).run_request,
+        T.nilable(Interface::Hover),
+      )
     end
 
     sig { params(uri: String).returns(T::Array[Interface::DocumentLink]) }
