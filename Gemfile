@@ -5,7 +5,7 @@ source "https://rubygems.org"
 gemspec
 
 gem "bundler", "~> 2.4.2"
-gem "debug", "~> 1.7", require: false
+gem "debug", "~> 1.7", require: false, platforms: :mri
 gem "minitest", "~> 5.18"
 gem "minitest-reporters", "~> 1.6"
 gem "mocha", "~> 2.0"
